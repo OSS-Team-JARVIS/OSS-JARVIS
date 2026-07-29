@@ -63,7 +63,7 @@ class OllamaProvider(BaseProvider):
         model: str = "qwen2.5:3b",
         temperature: float = 0.2,
         max_context: int = 4096,
-        timeout_seconds: float = 60.0
+        timeout_seconds: float = 300.0
     ) -> None:
         """OllamaProvider의 생성자입니다.
 
@@ -127,3 +127,65 @@ class OllamaProvider(BaseProvider):
             raise OllamaProviderError(f"Ollama API 응답 중 오류가 발생했습니다: {e}")
         except Exception as e:
             raise OllamaProviderError(f"예기치 못한 Ollama 연동 오류가 발생했습니다: {e}")
+
+
+class MockProvider(BaseProvider):
+    """Ollama 서버 없이 전체 모듈 동작 및 검증 재시도를 확인하기 위한 테스트용 모의 프로바이더입니다."""
+
+    def __init__(self) -> None:
+        """MockProvider의 생성자입니다."""
+        self._call_count = 0
+
+    def summarize(self, prompt: str) -> str:
+        """호출 횟수 및 프롬프트 내용에 따라 모의 응답을 반환합니다.
+
+        최종 보고서 요청 시 1회차에는 헤더를 누락시키고 2회차에 성공 서식을 돌려주어
+        Validator의 검증 실패 후 재생성 콜백 흐름이 도는 것을 눈으로 시뮬레이션할 수 있게 합니다.
+
+        Args:
+            prompt: 입력 프롬프트
+
+        Returns:
+            사전 정의된 마크다운 텍스트
+        """
+        self._call_count += 1
+
+        # 청크 요약 (Map) 단계 모의 동작
+        if "요약 전문가" in prompt:
+            return f"[청크 요약 {self._call_count}] 본 청킹 세그먼트의 요약 텍스트 내용입니다."
+
+        # 최종 요약 보고서 (Reduce) 단계 모의 동작
+        if "종합 보고서" in prompt:
+            # 최초 요약 보고서 응답 (2, 3번 헤더 누락 시나리오)
+            if self._call_count <= 3:
+                print("\n[MockProvider] 1차 종합 보고서를 생성합니다. (의도적으로 서식 누락)")
+                return (
+                    "# Mock JARVIS AI 종합 분석 보고서\n\n"
+                    "## 1. 개요\n"
+                    "이 보고서는 로컬에 Ollama가 실행 중이지 않을 때 모듈 동작을 테스트하기 위한 용도입니다.\n\n"
+                    "## 4. 개발 범위 및 실행 환경\n"
+                    "Windows 11, python 3.11, uv 가상환경\n\n"
+                    "## 5. 성과 계획 및 기대 효과\n"
+                    "보고서 생성 자동화를 통한 리소스 절감 효과를 기대합니다.\n"
+                )
+            # 재시도 콜백으로 재생성되었을 때의 정상 서식 응답
+            else:
+                print("\n[MockProvider] 재시도 요청을 수신하여 2차 종합 보고서를 생성합니다. (정상 서식)")
+                return (
+                    "# Mock JARVIS AI 종합 분석 보고서\n\n"
+                    "## 1. 개요\n"
+                    "이 보고서는 로컬에 Ollama가 실행 중이지 않을 때 모듈 동작을 테스트하기 위한 용도입니다.\n\n"
+                    "## 2. 핵심 내용\n"
+                    "Ollama 서버 설치 및 실행 없이도 전체 텍스트 전처리, 청킹, 검증 흐름을 입증하였습니다.\n\n"
+                    "## 3. 주요 기능 및 기술\n"
+                    "- 텍스트 태그 및 URL 자동 정제\n"
+                    "- Map-Reduce 기반 청크 슬라이싱 요약\n"
+                    "- 검증 실패 시 자동 재생성 콜백\n\n"
+                    "## 4. 개발 범위 및 실행 환경\n"
+                    "Windows 11, python 3.11, uv 가상환경\n\n"
+                    "## 5. 성과 계획 및 기대 효과\n"
+                    "보고서 생성 자동화를 통한 리소스 절감 효과를 기대합니다.\n"
+                )
+
+        return "# 제목\n## 1. 개요\n## 2. 핵심 내용\n## 3. 주요 기능 및 기술\n## 4. 개발 범위 및 실행 환경\n## 5. 성과 계획 및 기대 효과"
+

@@ -25,6 +25,9 @@ class ReportValidator:
     def validate(self, text: str) -> bool:
         """문서 내에 필수 마크다운 헤더가 포함되어 있는지 검증합니다.
 
+        로컬 LLM의 창작 변동성을 고려하여, 헤더의 번호와 핵심 키워드가 
+        해당 헤더 라인에 유연하게 포함되어 있으면 검증 통과로 처리합니다.
+
         Args:
             text: 검증할 최종 AI 응답 텍스트
 
@@ -34,25 +37,21 @@ class ReportValidator:
         if not text:
             return False
 
-        # 제목 헤더(# 제목)가 단독 줄로 적어도 하나 존재하고 있는지 검증
-        # 공백 문자(\s+) 고려하여 정규식 검사
-        has_title = False
-        for line in text.split("\n"):
-            stripped = line.strip()
-            # '#'으로 시작하고 바로 뒤가 '##'가 아닌 마크다운 제목(# ) 매칭
-            if stripped.startswith("#") and not stripped.startswith("##"):
-                has_title = True
-                break
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
 
-        # 필수 헤더들의 포함 여부 확인
-        # 줄바꿈 및 다중 스페이스 변동을 최소화하기 위해 공백을 정규화한 후 포함 검사
-        normalized_text = re.sub(r"\s+", " ", text)
-        has_headers = all(
-            re.sub(r"\s+", " ", req) in normalized_text
-            for req in self.required_headers
-        )
+        # 1. `# 제목` 검증
+        has_title = any(line.startswith("#") and not line.startswith("##") for line in lines)
 
-        return has_title and has_headers
+        # 2. 각 문항별 필수 헤더 존재 여부 유연 매칭
+        # 예: '## 1. 개요 및 목적' 또는 '## 1. 개요' 모두 통과
+        has_h1 = any(line.startswith("##") and "1" in line and "개요" in line for line in lines)
+        has_h2 = any(line.startswith("##") and "2" in line and ("핵심" in line or "내용" in line) for line in lines)
+        has_h3 = any(line.startswith("##") and "3" in line and ("기능" in line or "기술" in line) for line in lines)
+        has_h4 = any(line.startswith("##") and "4" in line and ("범위" in line or "환경" in line) for line in lines)
+        has_h5 = any(line.startswith("##") and "5" in line and ("성과" in line or "효과" in line or "기대" in line) for line in lines)
+
+        # 모든 필수 요소 검증 충족 여부 반환
+        return has_title and has_h1 and has_h2 and has_h3 and has_h4 and has_h5
 
     def validate_and_retry(
         self,

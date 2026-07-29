@@ -17,7 +17,7 @@ from jarvis_report.chunk_processor import ChunkProcessor
 from jarvis_report.logger import log_execution, logger
 from jarvis_report.preprocess import TextPreprocessor
 from jarvis_report.prompt_builder import PromptBuilder
-from jarvis_report.providers import BaseProvider, OllamaProvider, OllamaProviderError
+from jarvis_report.providers import BaseProvider, OllamaProvider, MockProvider, OllamaProviderError
 from jarvis_report.report_writer import ReportWriter
 from jarvis_report.validator import ReportValidator
 
@@ -102,26 +102,35 @@ def generate_final_report(
     return final_report
 
 
-def run_pipeline(project_name: str, raw_data_path: str) -> None:
+def run_pipeline(project_name: str, raw_data_path: str, use_mock: bool = False) -> None:
     """전체 AI 보고서 생성 파이프라인을 구동합니다.
 
     Args:
         project_name: 파일명 및 로그 식별에 사용될 프로젝트 이름
         raw_data_path: 분석 대상 원본 텍스트 파일 경로
+        use_mock: Ollama 대신 가상 Mock LLM을 사용하여 시뮬레이션할지 여부
     """
     start_time = datetime.now()
     error_msg: Optional[str] = None
+    model_label = "Mock-LLM-Qwen" if use_mock else config.MODEL
 
     try:
         # 객체 초기화
         preprocessor = TextPreprocessor()
         chunk_processor = ChunkProcessor(config.CHUNK_SIZE, config.OVERLAP)
         prompt_builder = PromptBuilder()
-        provider = OllamaProvider(
-            model=config.MODEL,
-            temperature=config.TEMPERATURE,
-            max_context=config.MAX_CONTEXT
-        )
+
+        # 프로바이더 선택 분기
+        if use_mock:
+            print("[System] Ollama 서버를 사용하지 않고 모의(Mock) LLM 모드로 실행합니다.")
+            provider: BaseProvider = MockProvider()
+        else:
+            provider = OllamaProvider(
+                model=config.MODEL,
+                temperature=config.TEMPERATURE,
+                max_context=config.MAX_CONTEXT
+            )
+
         validator = ReportValidator()
         writer = ReportWriter(config.REPORT_DIR)
 
@@ -150,7 +159,7 @@ def run_pipeline(project_name: str, raw_data_path: str) -> None:
     finally:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        log_execution(start_time, end_time, config.MODEL, duration, error_msg)
+        log_execution(start_time, end_time, model_label, duration, error_msg)
 
 
 def main() -> None:
@@ -165,11 +174,15 @@ def main() -> None:
             f.write("이것은 AI 요약 보고서 테스트를 위한 샘플 텍스트입니다. "
                     "기본 텍스트를 구성하고 모듈 작동을 확인합니다.")
 
+    # --mock 명령 인자 감지
+    use_mock = "--mock" in sys.argv
+
     try:
-        run_pipeline(project_name, raw_data_path)
+        run_pipeline(project_name, raw_data_path, use_mock=use_mock)
     except Exception as e:
         print(f"\n[오류] 프로그램 실행이 실패했습니다. 세부 정보: {e}")
         sys.exit(1)
+
 
 
 if __name__ == "__main__":
