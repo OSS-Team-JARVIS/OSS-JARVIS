@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.temp/
+.temp_test/
+temp_test_folder/
+
+.DS_Store
+Thumbs.db
