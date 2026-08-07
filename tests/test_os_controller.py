@@ -32,6 +32,28 @@ class OSControllerSafetyTests(unittest.TestCase):
         self.controller.delete_path(empty_folder)
         self.assertFalse(empty_folder.exists())
 
+    def test_search_without_query_returns_all_files(self):
+        (self.root / "a.txt").write_text("alpha", encoding="utf-8")
+        (self.root / "b.md").write_text("beta", encoding="utf-8")
+
+        results = self.controller.search_files("")
+
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(path.exists() for path in results))
+
+    def test_search_ignores_hidden_directories(self):
+        visible_file = self.root / "visible.txt"
+        visible_file.write_text("visible", encoding="utf-8")
+
+        hidden_dir = self.root / ".git" / "objects"
+        hidden_dir.mkdir(parents=True)
+        (hidden_dir / "secret.txt").write_text("hidden", encoding="utf-8")
+
+        results = self.controller.search_files("")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0], visible_file)
+
     def test_prevents_path_traversal_outside_base(self):
         with self.assertRaises(ValueError):
             self.controller.create_folder("../outside")

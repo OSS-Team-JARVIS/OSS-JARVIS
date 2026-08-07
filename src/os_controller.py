@@ -44,7 +44,10 @@ def list_folder_contents(folder_path: Union[str, os.PathLike]) -> List[Path]:
 
 def _ensure_safe_delete_target(base_path: Path, target: Union[str, os.PathLike]) -> Path:
     """삭제 대상이 작업 디렉터리 내부이고 보호된 시스템 경로가 아닌지 확인합니다."""
-    target_path = _resolve_target_path(base_path, target)
+    try:
+        target_path = _resolve_target_path(base_path, target)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
 
     if target_path == base_path:
         raise PermissionError("작업 디렉터리는 삭제할 수 없습니다.")
@@ -97,7 +100,12 @@ class OSController:
 
     def delete_item(self, target: Union[str, os.PathLike], recursive: bool = False) -> None:
         """파일 또는 빈 폴더를 안전하게 삭제합니다. 보호된 경로와 작업 디렉터리 밖의 경로는 차단합니다."""
-        target_path = _ensure_safe_delete_target(self.folder_path, target)
+        try:
+            target_path = _ensure_safe_delete_target(self.folder_path, target)
+        except PermissionError as exc:
+            raise PermissionError(f"삭제가 차단되었습니다: {exc}") from exc
+        except ValueError:
+            raise
 
         if not target_path.exists():
             raise FileNotFoundError(f"삭제 대상이 존재하지 않습니다: {target_path}")
@@ -107,10 +115,13 @@ class OSController:
                 raise OSError(f"폴더가 비어 있지 않아 삭제할 수 없습니다: {target_path}")
             shutil.rmtree(target_path)
         else:
-            if target_path.is_dir():
-                target_path.rmdir()
-            else:
-                target_path.unlink()
+            try:
+                if target_path.is_dir():
+                    target_path.rmdir()
+                else:
+                    target_path.unlink()
+            except PermissionError as exc:
+                raise PermissionError(f"권한 때문에 삭제할 수 없습니다: {target_path}") from exc
 
     def delete_path(self, target: Union[str, os.PathLike], recursive: bool = False) -> None:
         """delete_item의 호환용 별칭입니다."""
@@ -119,16 +130,23 @@ class OSController:
     def search_files(self, query: str, extension: str = None, recursive: bool = True) -> List[Path]:
         """지정한 키워드나 확장자로 파일을 검색해 리스트로 반환합니다."""
         if not query and not extension:
-            raise ValueError("검색 키워드나 확장자를 하나 이상 지정해야 합니다.")
+            query = ""
 
         results: List[Path] = []
         search_root = self.folder_path
 
+        def should_skip(item: Path) -> bool:
+            if item.name.startswith("."):
+                return True
+            return item.name in {"__pycache__", ".pytest_cache", ".mypy_cache", ".venv"}
+
         def walk(current_dir: Path) -> None:
             for item in sorted(current_dir.iterdir(), key=lambda p: p.name):
-                if item.is_dir() and recursive:
-                    walk(item)
-                if not item.is_file():
+                if item.is_dir():
+                    if recursive and not should_skip(item):
+                        walk(item)
+                    continue
+                if not item.is_file() or should_skip(item):
                     continue
 
                 name_match = True
