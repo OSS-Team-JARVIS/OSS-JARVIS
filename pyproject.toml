@@ -106,7 +106,13 @@ addopts = [
     "--strict-config",
     "--strict-markers",
 ]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # Windows 프로액터 루프에서 curl_cffi가 내는 보강 안내 경고(무해, 자동 셀렉터 스레드 등록)
+    "ignore::curl_cffi.utils.CurlCffiWarning",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["src"]
