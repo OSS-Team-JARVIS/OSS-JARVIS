@@ -31,12 +31,39 @@ class FakeResponse:
 Route = FakeResponse | Callable[[], FakeResponse]
 
 
+@dataclass(frozen=True)
+class RecordedRequest:
+    """하니스가 받은 요청 한 건(API 계약 검증용)."""
+
+    method: str
+    path: str
+    headers: dict[str, str]
+    body: bytes
+
+
 class _Router(BaseHTTPRequestHandler):
     routes: dict[str, Route]
     request_log: list[tuple[float, float]] | None
+    received: list[RecordedRequest] | None
 
     def do_GET(self) -> None:
-        route = self.routes.get(self.path)
+        self._handle()
+
+    def do_POST(self) -> None:
+        self._handle()
+
+    def _handle(self) -> None:
+        body_in = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        if self.received is not None:
+            self.received.append(
+                RecordedRequest(
+                    method=self.command,
+                    path=self.path,
+                    headers={k.lower(): v for k, v in self.headers.items()},
+                    body=body_in,
+                ),
+            )
+        route = self.routes.get(self.path.split("?", 1)[0])
         if route is None:
             self.send_error(404)
             return
@@ -64,12 +91,13 @@ def make_server(
     routes: dict[str, Route],
     *,
     request_log: list[tuple[float, float]] | None = None,
+    received: list[RecordedRequest] | None = None,
 ) -> Iterator[str]:
     """라우트 테이블로 에페메랄 로컬 서버를 띄우고 base URL을 내어준다."""
     handler = type(
         "BoundRouter",
         (_Router,),
-        {"routes": routes, "request_log": request_log},
+        {"routes": routes, "request_log": request_log, "received": received},
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
