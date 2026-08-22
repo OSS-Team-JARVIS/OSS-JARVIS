@@ -1,0 +1,127 @@
+[project]
+name = "jarvis-crawler"
+version = "0.1.0"
+description = "Team JARVIS 자율 웹 서칭·크롤링 엔진 — 검색 → 수집 → 본문 추출 파이프라인"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # 검색 단계
+    "httpx2[http2,brotli,zstd]>=0.5",   # 네이버/Serper JSON API 호출 (M3)
+    "ddgs>=9",                          # 무료 폴백 검색 (M3)
+    # 수집·추출 단계
+    "curl_cffi>=0.15",                  # TLS impersonation 페이지 페치 (M2)
+    "trafilatura>=2.0",                 # 본문 추출 메인 (M1)
+    "newspaper4k>=0.9",                 # 본문 추출 폴백 (M1)
+    "lxml-html-clean",                  # newspaper4k 의존
+    "charset-normalizer>=3",            # EUC-KR 등 인코딩 정규화
+    # 신뢰성 계층
+    "tenacity>=9",                      # 지수 백오프 재시도
+    "protego>=0.4",                     # robots.txt 파싱
+    # MCP 노출 (M5)
+    "mcp>=1.0",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.21",
+    "ruff>=0.8",
+    "pytest>=8",
+    "pytest-asyncio>=1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jarvis_crawler"]
+
+# ─────────────────────────────────────────────────────────────────
+# basedpyright - typeCheckingMode = "all"
+# ─────────────────────────────────────────────────────────────────
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.13"
+pythonPlatform = "All"
+include = ["src", "tests"]
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
+
+reportUnusedCallResult = "warning"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnusedVariable = "error"
+reportMissingParameterType = "error"
+reportMissingReturnType = "error"
+reportPrivateUsage = "error"
+
+# ─────────────────────────────────────────────────────────────────
+# ruff
+# ─────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",   # formatter conflict
+    "ISC001",   # formatter conflict
+    "D203",     # D211 preferred
+    "D213",     # D212 preferred
+    "CPY001",   # copyright notice
+    "FBT001",   # boolean positional arg (typer/CLI ergonomics)
+    "FBT002",
+    "TD002",    # TODO author
+    "TD003",    # TODO link
+    "FIX002",   # TODO allowed
+    "TRY003",   # 상세 사유를 담는 타입화 예외 계약(errors.py)과 충돌
+    "EM101",    # ↑ 동일 사유: 예외 생성자에 리터럴 인자 허용
+    "EM102",
+    "ANN401",   # JSON API 경계는 응답이 동적 타입이라 Any 허용
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",
+    "S106",     # 가짜 자격 증명 상수
+    "ARG",
+    "PLR2004",
+    "SLF001",
+    "D",
+]
+
+# CLI는 사용자 안내 문구의 표준 출력이 본업이다.
+"src/jarvis_crawler/cli.py" = ["T201"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ─────────────────────────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+filterwarnings = [
+    "error",
+    # Windows 프로액터 루프에서 curl_cffi가 내는 보강 안내 경고(무해, 자동 셀렉터 스레드 등록)
+    "ignore::curl_cffi.utils.CurlCffiWarning",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
