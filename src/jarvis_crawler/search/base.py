@@ -6,9 +6,10 @@ The pipeline only ever depends on the :class:`SearchProvider` protocol.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from jarvis_crawler.types import SearchProviderName, SearchResult
+if TYPE_CHECKING:
+    from jarvis_crawler.types import SearchProviderName, SearchResult
 
 
 class SearchProvider(Protocol):
