@@ -9,3 +9,16 @@ temp_test_folder/
 
 .DS_Store
 Thumbs.db
+
+# Python tooling (web-crawler part)
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.basedpyright/
+
+# local agent tooling
+.codegraph/
+.omo/
