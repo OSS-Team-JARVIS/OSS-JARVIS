@@ -91,6 +91,9 @@ ignore = [
     "D",
 ]
 
+# CLI는 사용자 안내 문구의 표준 출력이 본업이다.
+"src/jarvis_crawler/cli.py" = ["T201"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
