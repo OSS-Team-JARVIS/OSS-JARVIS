@@ -730,7 +730,7 @@ requires-dist = [
     { name = "ddgs", specifier = ">=9" },
     { name = "httpx2", extras = ["http2", "brotli", "zstd"], specifier = ">=0.5" },
     { name = "lxml-html-clean" },
-    { name = "mcp", specifier = ">=1.0" },
+    { name = "mcp", specifier = ">=2.0" },
     { name = "newspaper4k", specifier = ">=0.9" },
     { name = "protego", specifier = ">=0.4" },
     { name = "pydantic", specifier = ">=2" },

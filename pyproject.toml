@@ -17,8 +17,8 @@ dependencies = [
     # 신뢰성 계층
     "tenacity>=9",                      # 지수 백오프 재시도
     "protego>=0.4",                     # robots.txt 파싱
-    # MCP 노출 (M5)
-    "mcp>=1.0",
+    # MCP 노출 (M5) — mcp.server.mcpserver 고수준 API는 2.x 전용이다.
+    "mcp>=2.0",
     "pydantic>=2",
 ]
 
