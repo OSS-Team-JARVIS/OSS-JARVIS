@@ -89,8 +89,37 @@ class ResearchPipeline:
         failures = tuple(o for o in outcomes if isinstance(o, FailedFetch))
         return ResearchBundle(query=query, pages=pages, failures=failures)
 
-    async def _process_single(self, url: str) -> CrawledPage | FailedFetch:
+    async def crawl_urls(
+        self,
+        urls: Sequence[str],
+        *,
+        max_chars: int | None = None,
+    ) -> ResearchBundle:
+        """검색 없이 URL 목록을 직접 크롤링한다(MCP crawl 도구용).
+
+        정규화 키로 중복을 제거하고 등장 순서를 유지한다. 검색 결과와
+        달리 ``max_pages`` 상한을 적용하지 않는다(목록 크기는 호출자가 책임진다).
+        """
+        seen: dict[str, str] = {}
+        for url in urls:
+            key = normalize_url(url)
+            if key not in seen:
+                seen[key] = url
+        outcomes = await asyncio.gather(
+            *(self._process_single(url, max_chars=max_chars) for url in seen.values()),
+        )
+        pages = tuple(o for o in outcomes if isinstance(o, CrawledPage))
+        failures = tuple(o for o in outcomes if isinstance(o, FailedFetch))
+        return ResearchBundle(query="", pages=pages, failures=failures)
+
+    async def _process_single(
+        self,
+        url: str,
+        *,
+        max_chars: int | None = None,
+    ) -> CrawledPage | FailedFetch:
         """한 URL에 대해 robots 확인→페치→추출을 수행한다."""
+        effective_max_chars = self._max_chars if max_chars is None else max_chars
         if not await self._robots.allowed(url):
             return FailedFetch(
                 url=url,
@@ -100,7 +129,7 @@ class ResearchPipeline:
         outcome = await self._fetcher.fetch(url)
         if isinstance(outcome, FailedFetch):
             return outcome
-        extracted = self._extractor.extract(outcome, max_chars=self._max_chars)
+        extracted = self._extractor.extract(outcome, max_chars=effective_max_chars)
         if not extracted.content.strip():
             # 추출기 계약: 빈 본문은 파이프라인이 실패로 재분류한다.
             return FailedFetch(

@@ -9,6 +9,7 @@ from jarvis_crawler.errors import ProviderAttempt, SearchChainError, SearchProvi
 from jarvis_crawler.search.ddgs_provider import DdgsProvider
 from jarvis_crawler.search.naver import NaverProvider
 from jarvis_crawler.search.serper import SerperProvider
+from jarvis_crawler.types import SearchProviderName
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -64,3 +65,34 @@ def chain_from_env(environ: Mapping[str, str] | None = None) -> SearchChain:
         providers.append(SerperProvider(api_key=serper_key))
     providers.append(DdgsProvider())
     return SearchChain(providers)
+
+
+def make_provider(
+    name: str,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> SearchProvider:
+    """엔진 별칭 하나로 환경변수 기반 단일 프로바이더를 만든다.
+
+    MCP ``web_search`` 도구의 ``engine`` 인자 처리용이다. 체인 구성과
+    달리 자격 증명이 없으면 조용히 건너뛰지 않고 :class:`ValueError` 를 낸다.
+    """
+    env = os.environ if environ is None else environ
+    key = name.strip().lower()
+    if key == SearchProviderName.NAVER.value:
+        client_id = env.get("NAVER_CLIENT_ID")
+        client_secret = env.get("NAVER_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            raise ValueError(
+                "네이버 자격 증명(NAVER_CLIENT_ID·NAVER_CLIENT_SECRET)이 없다",
+            )
+        return NaverProvider(client_id=client_id, client_secret=client_secret)
+    if key == SearchProviderName.SERPER.value:
+        api_key = env.get("SERPER_API_KEY")
+        if not api_key:
+            raise ValueError("Serper 자격 증명(SERPER_API_KEY)이 없다")
+        return SerperProvider(api_key=api_key)
+    if key == SearchProviderName.DDGS.value:
+        return DdgsProvider()
+    supported = ", ".join(member.value for member in SearchProviderName)
+    raise ValueError(f"지원하지 않는 검색 엔진이다: {name} (지원 목록: {supported})")

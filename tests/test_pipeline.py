@@ -252,6 +252,52 @@ async def test_run_propagates_search_chain_error() -> None:
         await pipeline.run("q")
 
 
+@pytest.mark.asyncio
+async def test_crawl_urls_deduplicates_and_bundles() -> None:
+    urls = ["https://a.com/x", "https://a.com/x/", "https://b.com/y"]
+    fetcher = FakeFetcher()
+    pipeline = _pipeline(
+        FakeChain([]),
+        fetcher,
+        FakeRobots(set()),
+        FakeExtractor(set()),
+    )
+
+    bundle = await pipeline.crawl_urls(urls)
+
+    assert bundle.query == ""
+    assert [p.url for p in bundle.pages] == ["https://a.com/x", "https://b.com/y"]
+    assert fetcher.calls == ["https://a.com/x", "https://b.com/y"]
+    assert bundle.failures == ()
+
+
+@pytest.mark.asyncio
+async def test_crawl_urls_records_failures_and_respects_max_chars() -> None:
+    blocked_url = "https://blocked.com/a"
+    bad_url = "https://bad.com/x"
+    good_url = "https://good.com/y"
+    scripted_failure = FailedFetch(
+        url=bad_url,
+        reason=FetchFailureReason.HTTP_ERROR,
+        detail="HTTP 500",
+    )
+    fetcher = FakeFetcher({bad_url: scripted_failure})
+    pipeline = _pipeline(
+        FakeChain([]),
+        fetcher,
+        FakeRobots({blocked_url}),
+        FakeExtractor(set()),
+    )
+
+    bundle = await pipeline.crawl_urls([blocked_url, bad_url, good_url], max_chars=3)
+
+    assert [p.url for p in bundle.pages] == [good_url]
+    assert bundle.pages[0].content_length == 3
+    reasons = {f.url: f.reason for f in bundle.failures}
+    assert reasons[blocked_url] is FetchFailureReason.ROBOTS_DISALLOWED
+    assert reasons[bad_url] is FetchFailureReason.HTTP_ERROR
+
+
 class StubPipeline:
     """run()이 미리 준비한 번들을 반환하는 CLI용 스터브."""
 
