@@ -75,11 +75,16 @@ ignore = [
     "TD002",    # TODO author
     "TD003",    # TODO link
     "FIX002",   # TODO allowed
+    "TRY003",   # 상세 사유를 담는 타입화 예외 계약(errors.py)과 충돌
+    "EM101",    # ↑ 동일 사유: 예외 생성자에 리터럴 인자 허용
+    "EM102",
+    "ANN401",   # JSON API 경계는 응답이 동적 타입이라 Any 허용
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",
+    "S106",     # 가짜 자격 증명 상수
     "ARG",
     "PLR2004",
     "SLF001",
