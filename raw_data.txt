@@ -1,0 +1,4 @@
+Source URL: mock://jarvis/local-result
+Title: Mock crawl result: AI 에이전트
+Content:
+검색어 'AI 에이전트'에 대한 로컬 목 데이터입니다. 크롤러에서 수집된 본문을 보고서 모듈로 전달하는 통합 테스트용 내용입니다.
