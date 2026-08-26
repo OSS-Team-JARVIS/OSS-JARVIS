@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSS-JARVIS Workflow Console</title>
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --bg-alt: #efe5d8;
+      --card: #fffaf2;
+      --ink: #1d1a16;
+      --muted: #6a635a;
+      --line: #d8cab5;
+      --accent: #c24f2e;
+      --accent-soft: #f8d9cc;
+      --ok: #0b7a49;
+      --warn: #ad6a0d;
+      --err: #b12e2e;
+      --shadow: 0 12px 30px rgba(36, 26, 16, 0.12);
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1200px 500px at -10% -10%, #f9e1c8 0%, transparent 60%),
+        radial-gradient(900px 420px at 110% 5%, #f2d6c3 0%, transparent 58%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 100%);
+      display: grid;
+      place-items: start center;
+      padding: 32px 16px 48px;
+    }
+
+    .shell {
+      width: min(1120px, 100%);
+      display: grid;
+      gap: 18px;
+      animation: rise .6s ease-out;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #fff8ef 0%, #fff2e6 100%);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 1.2rem + 1vw, 2rem);
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1.04rem;
+      letter-spacing: -0.01em;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      font-size: .88rem;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .15s ease, filter .15s ease;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #f3e6d7;
+      color: #5a3f2e;
+      border: 1px solid #ddc4aa;
+    }
+
+    .timeline {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    .timeline li {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 4px;
+      transform: translateY(8px);
+      opacity: 0;
+      animation: reveal .4s ease forwards;
+    }
+
+    .timeline li:nth-child(1) { animation-delay: .04s; }
+    .timeline li:nth-child(2) { animation-delay: .08s; }
+    .timeline li:nth-child(3) { animation-delay: .12s; }
+    .timeline li:nth-child(4) { animation-delay: .16s; }
+
+    .step-title {
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
+    .step-meta {
+      font-size: .84rem;
+      color: var(--muted);
+    }
+
+    .status {
+      justify-self: start;
+      font-size: .78rem;
+      border-radius: 999px;
+      padding: 2px 8px;
+      border: 1px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .status-pending { background: #f7f0e4; border-color: #e9d4b4; color: #8a5e20; }
+    .status-running { background: #fef2dd; border-color: #f1c177; color: #9f5800; }
+    .status-done { background: #e9f7ef; border-color: #8fd8ae; color: var(--ok); }
+    .status-error { background: #fde9e9; border-color: #ecadad; color: var(--err); }
+    .status-skipped { background: #efefef; border-color: #d9d9d9; color: #666; }
+
+    pre {
+      margin: 0;
+      max-height: 340px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 12px;
+      color: #2c241d;
+      line-height: 1.35;
+      font-size: .82rem;
+    }
+
+    .report-content {
+      min-height: 180px;
+      max-height: 520px;
+      white-space: pre-wrap;
+    }
+
+    .paths {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: .84rem;
+      word-break: break-all;
+    }
+
+    .hint {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes reveal {
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>OSS-JARVIS Unified Workflow Console</h1>
+      <p>크롤링 엔진, OS 제어, AI 피드백 루프, 보고서 생성을 하나의 흐름으로 실행하고 상태 타임라인으로 추적합니다.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>입력 파라미터</h2>
+
+        <div class="field">
+          <label for="query">명령/질의 (크롤링 query)</label>
+          <input id="query" type="text" placeholder="예: AI 에이전트 최신 동향">
+        </div>
+
+        <div class="field">
+          <label for="folderPath">로컬 경로 (OS 제어 대상 폴더)</label>
+          <input id="folderPath" type="text" placeholder="예: C:/Users/peron/Downloads">
+        </div>
+
+        <div class="field">
+          <label for="rawDataDir">크롤링 원문 저장 폴더 (선택)</label>
+          <input id="rawDataDir" type="text" placeholder="비워두면 자동 임시 폴더 사용">
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="osAction">OS 액션</label>
+            <select id="osAction">
+              <option value="search">search</option>
+              <option value="classify">classify</option>
+              <option value="delete">delete</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="searchQuery">OS 검색어 (search/delete용)</label>
+            <input id="searchQuery" type="text" placeholder="예: report">
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="count">검색 개수</label>
+            <input id="count" type="number" value="10" min="1" max="30">
+          </div>
+          <div class="field">
+            <label for="maxPages">크롤링 최대 페이지</label>
+            <input id="maxPages" type="number" value="8" min="1" max="20">
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="maxChars">페이지당 최대 글자수</label>
+            <input id="maxChars" type="number" value="10000" min="1000" step="500">
+          </div>
+          <div class="field">
+            <label for="reportMock">보고서 Mock 모드</label>
+            <select id="reportMock">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="crawlerMock">크롤러 Mock 모드</label>
+            <select id="crawlerMock">
+              <option value="false">false (외부 검색)</option>
+              <option value="true" selected>true (로컬 목 데이터)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="feedbackMock">피드백 Mock 모드</label>
+            <select id="feedbackMock">
+              <option value="false">false (Ollama)</option>
+              <option value="true" selected>true (로컬 검토)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnValidate" class="btn-secondary" type="button">경로 검증</button>
+          <button id="btnRun" class="btn-primary" type="button">통합 워크플로우 실행</button>
+        </div>
+
+        <p class="hint">경로 검증은 /api/path/validate, 통합 실행은 /api/run-all 엔드포인트를 호출합니다.</p>
+      </article>
+
+      <article class="card">
+        <h2>상태 타임라인</h2>
+        <ul id="timeline" class="timeline"></ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>응답 로그(JSON)</h2>
+      <pre id="log">{ "ready": true }</pre>
+    </section>
+
+    <section class="card">
+      <h2>최종 보고서</h2>
+      <div id="reportPaths" class="paths">아직 생성된 보고서가 없습니다.</div>
+      <pre id="reportContent" class="report-content">통합 실행이 완료되면 Markdown 보고서가 표시됩니다.</pre>
+    </section>
+  </main>
+
+  <script>
+    let deleteConfirmationApproved = false;
+
+    const steps = [
+      { key: "crawl", label: "크롤링" },
+      { key: "os_control", label: "OS 제어" },
+      { key: "feedback", label: "AI 피드백" },
+      { key: "report", label: "보고서 생성" },
+    ];
+
+    const timelineEl = document.getElementById("timeline");
+    const logEl = document.getElementById("log");
+    const reportPathsEl = document.getElementById("reportPaths");
+    const reportContentEl = document.getElementById("reportContent");
+    const btnValidate = document.getElementById("btnValidate");
+    const btnRun = document.getElementById("btnRun");
+
+    function getPayload() {
+      return {
+        query: document.getElementById("query").value.trim(),
+        folderPath: document.getElementById("folderPath").value.trim(),
+        rawDataDir: document.getElementById("rawDataDir").value.trim(),
+        osAction: document.getElementById("osAction").value,
+        searchQuery: document.getElementById("searchQuery").value.trim(),
+        count: Number(document.getElementById("count").value || 10),
+        maxPages: Number(document.getElementById("maxPages").value || 8),
+        maxChars: Number(document.getElementById("maxChars").value || 10000),
+        useMock: document.getElementById("reportMock").value === "true",
+        useMockCrawler: document.getElementById("crawlerMock").value === "true",
+        useMockFeedback: document.getElementById("feedbackMock").value === "true",
+        runFeedback: true,
+      };
+    }
+
+    function renderTimeline(stateMap) {
+      timelineEl.innerHTML = "";
+      for (const step of steps) {
+        const status = stateMap[step.key]?.status || "pending";
+        const detail = stateMap[step.key]?.detail || "대기 중";
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <span class="status status-${status}">${status}</span>
+          <div class="step-title">${step.label}</div>
+          <div class="step-meta">${detail}</div>
+        `;
+        timelineEl.appendChild(li);
+      }
+    }
+
+    function setLog(obj) {
+      logEl.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    function renderReport(result) {
+      const paths = result.reportPaths || {};
+      const entries = Object.entries(paths);
+      reportPathsEl.textContent = entries.length
+        ? entries.map(([format, path]) => `${format}: ${path}`).join("\n")
+        : "생성된 보고서 경로가 없습니다.";
+      reportContentEl.textContent = result.reportContent || "Markdown 보고서 내용이 없습니다.";
+    }
+
+    function markRunningBase() {
+      const map = {};
+      for (const step of steps) {
+        map[step.key] = { status: "pending", detail: "대기 중" };
+      }
+      map.crawl = { status: "running", detail: "크롤링 실행 중" };
+      renderTimeline(map);
+      return map;
+    }
+
+    function startProgressTicker(stateMap) {
+      let index = 0;
+      const timer = setInterval(() => {
+        if (index > 0) {
+          stateMap[steps[index - 1].key] = { status: "done", detail: "단계 완료 대기" };
+        }
+        if (index < steps.length) {
+          stateMap[steps[index].key] = { status: "running", detail: "처리 중" };
+          renderTimeline(stateMap);
+          index += 1;
+        }
+      }, 1200);
+      return () => clearInterval(timer);
+    }
+
+    function applyServerTimeline(serverTimeline, stateMap) {
+      for (const item of serverTimeline || []) {
+        const key = item.step;
+        if (!stateMap[key]) {
+          continue;
+        }
+        stateMap[key] = {
+          status: item.status || "done",
+          detail: item.detail || "완료",
+        };
+      }
+      renderTimeline(stateMap);
+    }
+
+    async function fetchJson(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const msg = data.error || `${response.status} ${response.statusText}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    btnValidate.addEventListener("click", async () => {
+      const folderPath = document.getElementById("folderPath").value.trim();
+      if (!folderPath) {
+        setLog({ error: "folderPath를 입력하세요." });
+        return;
+      }
+
+      btnValidate.disabled = true;
+      try {
+        const result = await fetchJson("/api/path/validate", {
+          path: folderPath,
+          requireDirectory: true,
+          mustBeWritable: false,
+        });
+        setLog(result);
+      } catch (error) {
+        setLog({ error: error.message });
+      } finally {
+        btnValidate.disabled = false;
+      }
+    });
+
+    btnRun.addEventListener("click", async () => {
+      const payload = getPayload();
+      if (!payload.query) {
+        setLog({ error: "query를 입력하세요." });
+        return;
+      }
+
+      const action = payload.osAction;
+      if (action === 'delete' && !deleteConfirmationApproved) {
+        const confirmed = window.confirm("선택한 파일을 삭제하시겠습니까?");
+        if (!confirmed) {
+          setLog({ message: "삭제 작업이 취소되었습니다." });
+          return;
+        }
+        deleteConfirmationApproved = true;
+      }
+
+      btnRun.disabled = true;
+      btnValidate.disabled = true;
+
+      const stateMap = markRunningBase();
+      const stopProgressTicker = startProgressTicker(stateMap);
+      setLog({ message: "통합 워크플로우 요청 전송", payload });
+
+      try {
+        const result = await fetchJson("/api/run-all", payload);
+        stopProgressTicker();
+        applyServerTimeline(result.timeline, stateMap);
+        stateMap.crawl = { status: "done", detail: "크롤링 완료" };
+        stateMap.os_control = { status: payload.folderPath ? "done" : "skipped", detail: payload.folderPath ? "OS 파일 작업 완료" : "경로 미입력" };
+        stateMap.feedback = { status: payload.runFeedback ? "done" : "skipped", detail: payload.runFeedback ? "AI 피드백 완료" : "선택하지 않음" };
+        stateMap.report = { status: "done", detail: "요약 보고서 생성 완료" };
+        renderTimeline(stateMap);
+        renderReport(result);
+        setLog(result);
+      } catch (error) {
+        stopProgressTicker();
+        stateMap.crawl = stateMap.crawl.status === "running"
+          ? { status: "error", detail: error.message }
+          : stateMap.crawl;
+
+        for (const step of ["os_control", "feedback", "report"]) {
+          if (stateMap[step].status === "pending") {
+            stateMap[step] = { status: "skipped", detail: "이전 단계 실패로 중단" };
+          }
+        }
+
+        renderTimeline(stateMap);
+        setLog({ error: error.message });
+      } finally {
+        btnRun.disabled = false;
+        btnValidate.disabled = false;
+      }
+    });
+
+    renderTimeline({});
+  </script>
+</body>
+</html>

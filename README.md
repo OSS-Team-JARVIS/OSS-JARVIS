@@ -1,78 +1,131 @@
 # OSS-JARVIS
 
-Team JARVIS의 자율 웹 서칭·크롤링 엔진입니다. 검색 키워드 하나로
-네이버·Serper·DuckDuckGo를 순서대로 폴백 검색하고, 상위 URL을
-robots.txt를 존중하며 수집해 본문만 추출합니다.
+OSS-JARVIS는 검색·크롤링부터 로컬 파일 작업, AI 피드백, Markdown 보고서까지
+연결하는 4단계 통합 파이프라인입니다.
 
-## 주요 기능
-- 다중 검색 엔진 폴백 체인(naver → serper → ddgs)
-- curl_cffi 기반 페이지 페치(TLS impersonation)와 robots.txt 게이트
-- trafilatura/newspaper4k 본문 추출, 실패는 FailedFetch로 감사 가능
-- 결과 JSON 리서치 리포트(CLI)와 MCP 도구 노출(web_search·crawl)
+## 파이프라인 구조
+
+```text
+검색 쿼리
+  -> 1. 스마트 웹 크롤링(jarvis_crawler)
+  -> 2. 로컬 OS 제어(OSController)
+  -> 3. AI 피드백 루프(feedback_loop)
+  -> 4. 요약 보고서 생성(jarvis_report)
+```
+
+- `jarvis_crawler`: Naver, Serper, DDGS 검색 폴백, robots.txt 확인, 페이지 수집 및 본문 추출
+- `OSController`: 경로·권한 확인, 파일 검색·분류·삭제
+- `feedback_loop.py`: 전달받은 코드와 오류 로그를 분석하는 선택적 피드백 루프
+- `jarvis_report`: 원문 전처리, 청킹, 요약, Markdown 저장
+- `server.py`: 웹 UI와 API를 제공하며 `POST /api/run-all`로 전체 흐름을 실행
+- `static/index.html`: 검색어·경로 입력, 상태 타임라인, 보고서 결과 표시
 
 ## 설치
-Python 3.13+ 와 [uv](https://docs.astral.sh/uv/)가 필요합니다.
 
-```bash
+Python 3.13 이상을 권장합니다. `uv`를 사용하는 경우:
+
+```powershell
 uv sync
 ```
 
-## 환경변수(모두 선택 사항)
+일반 Python 환경에서는 프로젝트 의존성을 설치합니다:
 
-| 변수 | 용도 |
-|---|---|
-| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 네이버 개발자센터 검색 API |
-| `SERPER_API_KEY` | Serper.dev API |
-
-자격 증명이 없는 엔진은 체인에서 자동으로 건너뛰며,
-DuckDuckGo(ddgs)는 키 없이 항상 마지막 폴백으로 동작합니다.
-
-## CLI 사용
-
-```bash
-# "AI 트렌드"로 검색→크롤링 후 research_<타임스탬프>.json 생성
-uv run python -m jarvis_crawler "AI 트렌드"
-
-# 옵션 조정: 결과 5건, 최대 3페이지, 페이지당 4000자, 출력 경로 지정
-uv run python -m jarvis_crawler "AI 트렌드" --count 5 --max-pages 3 --max-chars 4000 -o out.json
+```powershell
+py -3 -m pip install -e .
 ```
 
-모든 검색 엔진이 실패하면 사유를 stderr에 남기고 종료 코드 1로 끝납니다.
+보고서의 실제 Ollama 모드를 사용할 때는 추가로 설치합니다:
 
-## MCP 서버(MCP 클라이언트 연동)
-
-```bash
-uv run python -m jarvis_crawler.mcp_server
+```powershell
+py -3 -m pip install -r jarvis_report/requirements.txt
 ```
 
-Claude Desktop 설정 예시(`claude_desktop_config.json`):
+테스트 도구:
 
-```json
-{
-  "mcpServers": {
-    "jarvis-crawler": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "<프로젝트 경로>",
-        "python",
-        "-m",
-        "jarvis_crawler.mcp_server"
-      ]
-    }
-  }
-}
+```powershell
+py -3 -m pip install pytest pytest-asyncio
 ```
 
-제공 도구:
-- `web_search(query, engine?, count=10)` — 검색 결과 JSON 배열. engine은 naver|serper|ddgs(미지정 시 폴백 체인).
-- `crawl(urls, max_chars=10000)` — URL 목록 직접 수집. 본문 페이지와 실패 목록 JSON 반환.
+## 오프라인 1초 시연
+
+서버를 실행합니다:
+
+```powershell
+py -3 server.py
+```
+
+다른 PowerShell 창에서 Mock 크롤링 결과를 즉시 확인합니다:
+
+```powershell
+py -3 -c "import server; print(server._run_crawler('offline demo', 1, 1, 1000, use_mock=True))"
+```
+
+외부 네트워크와 검색 API 키 없이 전체 API를 테스트하려면 다음 요청을 사용합니다:
+
+```powershell
+$body = @{
+  query = "offline demo"
+  count = 1
+  maxPages = 1
+  maxChars = 1000
+  rawDataDir = "$PWD"
+  folderPath = "$PWD"
+  osAction = "search"
+  searchQuery = "README"
+  useMockCrawler = $true
+  useMockFeedback = $true
+  runFeedback = $true
+  useMock = $true
+  projectName = "JARVIS_Offline_Demo"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/run-all" -Method POST `
+  -ContentType "application/json" -Body $body | ConvertTo-Json -Depth 10
+```
+
+빈 크롤링 결과는 UTF-8로 `[Notice] Crawled data is empty.`를 저장하므로
+보고서 입력 파일이 비어 파싱되는 문제를 방지합니다.
+
+## 브라우저 사용법
+
+브라우저에서 [http://127.0.0.1:8000](http://127.0.0.1:8000)을 엽니다.
+
+첫 실행은 다음처럼 Mock 모드를 사용합니다:
+
+- 명령/질의: `AI agent trends`
+- 로컬 경로: 프로젝트 폴더 경로
+- 크롤링 원문 저장 폴더: 프로젝트 폴더 경로 또는 빈칸
+- OS 액션: `search`
+- OS 검색어: `README`
+- 크롤러 Mock: `true`
+- 피드백 Mock: `true`
+- 보고서 Mock: `true`
+
+`경로 검증` 후 `통합 워크플로우 실행`을 누르면 크롤링, OS 파일 작업,
+AI 피드백, 보고서 생성 상태와 최종 Markdown 내용 및 저장 경로가 표시됩니다.
+
+## 실제 검색 및 보고서
+
+실제 검색은 외부 네트워크를 사용합니다. Naver 또는 Serper를 사용하려면
+다음 환경 변수를 설정할 수 있습니다:
+
+```text
+NAVER_CLIENT_ID
+NAVER_CLIENT_SECRET
+SERPER_API_KEY
+```
+
+실제 Ollama 보고서를 사용하려면 Ollama를 실행하고 모델을 준비합니다:
+
+```powershell
+ollama serve
+ollama pull qwen2.5:3b
+```
 
 ## 테스트
 
-```bash
-uv run pytest tests/test_types.py tests/test_extractor.py tests/test_fetcher.py tests/test_robots.py tests/test_search_providers.py tests/test_pipeline.py tests/test_mcp_server.py
+```powershell
+py -3 -m pytest -q
 ```
 
-> 저장소 루트의 레거시 데모 앱 테스트(`test_os_controller.py` 등)는 현재 정비 대상이라 위 스코프 실행을 권장합니다.
+비동기 테스트 모드는 루트 `pytest.ini`에서 `asyncio_mode = auto`로 설정됩니다.

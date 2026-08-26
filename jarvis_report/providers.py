@@ -8,7 +8,10 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 import httpx
-import ollama
+try:
+    import ollama
+except ImportError:  # pragma: no cover - Ollama를 사용하지 않는 Mock 모드
+    ollama = None
 
 
 # ==========================================
@@ -73,6 +76,11 @@ class OllamaProvider(BaseProvider):
             max_context: 최대 컨텍스트 윈도우 크기(num_ctx)
             timeout_seconds: API 호출 타임아웃 제한 시간(초)
         """
+        if ollama is None:
+            raise OllamaProviderError(
+                "ollama 패키지가 설치되어 있지 않습니다. Mock 모드를 사용하거나 설치하세요."
+            )
+
         self.model = model
         self.temperature = temperature
         self.max_context = max_context

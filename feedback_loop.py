@@ -1,81 +1,153 @@
-import subprocess
-import ollama
-import sys
+"""입력 코드와 오류 로그를 분석하는 AI 피드백 루프입니다.
 
-file_name = "buggy.py"
-max_attempts = 3
-
-for attempt in range(1, max_attempts + 1):
-    print(f"\n===== {attempt}번째 실행 =====")
-
-    result = subprocess.run(
-        [sys.executable, file_name],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode == 0:
-        print("실행 성공!")
-        print(result.stdout)
-        break
-
-    error_log = result.stderr
-
-    print("에러 발생!")
-    print(error_log)
-
-    with open(file_name, "r", encoding="utf-8") as f:
-        current_code = f.read()
-
-    prompt = f"""
-너는 Python 코드 오류 수정 전문가다.
-
-현재 Python 코드:
-{current_code}
-
-발생한 오류:
-{error_log}
-
-반드시 지켜야 할 규칙:
-1. 오류의 원인을 정확히 분석한다.
-2. 오류를 수정한 전체 Python 코드를 작성한다.
-3. 현재 코드의 정상적인 부분은 그대로 유지한다.
-4. 존재하지 않는 변수를 새로 만들거나 다른 이름으로 바꾸지 않는다.
-5. 설명하지 않는다.
-6. 마크다운을 사용하지 않는다.
-7. ``` 기호를 절대 사용하지 않는다.
-8. Python 코드만 출력한다.
-9. 수정된 코드는 바로 실행할 수 있어야 한다.
-
-수정된 전체 Python 코드만 출력해라.
+모듈 import 시 작업을 실행하지 않으며, ``run_feedback``를 호출한 경우에만
+전달받은 코드/텍스트를 분석합니다. 파일 수정은 ``apply_fix=True``일 때만
+명시적으로 수행합니다.
 """
 
-    response = ollama.chat(
-        model="qwen2.5:3b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+try:
+    import ollama
+except ImportError:  # pragma: no cover - 환경별 선택 의존성
+    ollama = None
+
+
+DEFAULT_MODEL = "qwen2.5:3b"
+DEFAULT_MAX_ATTEMPTS = 3
+
+
+def build_feedback_prompt(error_log: str, code_text: str) -> str:
+    """오류 로그와 작업 코드를 AI 피드백 입력 형식으로 결합합니다."""
+    return f"""너는 Python 코드 오류 수정 전문가다.
+
+현재 Python 코드:
+{code_text}
+
+발생한 오류 또는 실행 결과:
+{error_log}
+
+수정된 전체 Python 코드만 출력하고, 마크다운 코드 블록은 사용하지 마라.
+"""
+
+
+def analyze_error_log(
+    error_log: str,
+    code_text: str = "",
+    *,
+    model: str = DEFAULT_MODEL,
+) -> dict[str, Any]:
+    """오류와 코드를 분석해 수정안 또는 분석 오류를 반환합니다."""
+    if ollama is None:
+        return {"success": False, "error": "ollama 패키지가 설치되어 있지 않습니다."}
+
+    try:
+        response = ollama.chat(
+            model=model,
+            messages=[{"role": "user", "content": build_feedback_prompt(error_log, code_text)}],
+        )
+        fixed_code = str(response["message"]["content"])
+        fixed_code = fixed_code.replace("```python", "").replace("```", "").strip()
+        return {"success": True, "fixed_code": fixed_code, "model": model}
+    except Exception as exc:
+        return {"success": False, "error": str(exc), "model": model}
+
+
+def run_feedback(
+    *,
+    code_text: str = "",
+    error_log: str = "",
+    code_path: str | None = None,
+    model: str = DEFAULT_MODEL,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    apply_fix: bool = False,
+    execute: bool = False,
+) -> dict[str, Any]:
+    """전달받은 코드/텍스트에 대해 피드백을 수행합니다.
+
+    ``code_path``가 지정되면 코드를 읽을 수 있으며, ``apply_fix``가 참일
+    때만 마지막 수정안을 해당 파일에 기록합니다. 실행은 ``execute=True``일
+    때만 수행됩니다.
+    """
+    target_path = Path(code_path).expanduser() if code_path else None
+    if target_path is not None:
+        if not target_path.exists() or not target_path.is_file():
+            return {"success": False, "error": f"코드 파일을 찾을 수 없습니다: {target_path}"}
+        code_text = target_path.read_text(encoding="utf-8")
+
+    if not code_text.strip() and not error_log.strip():
+        return {"success": False, "error": "code_text 또는 error_log를 입력하세요."}
+
+    attempts = max(1, min(int(max_attempts), 10))
+    current_code = code_text
+    current_error = error_log
+    feedback_attempts: list[dict[str, Any]] = []
+
+    for attempt in range(1, attempts + 1):
+        if execute and current_code.strip():
+            execution = _execute_code(current_code, target_path.parent if target_path else None)
+            current_error = execution["stderr"]
+            if execution["success"]:
+                return {
+                    "success": True,
+                    "attempts": attempt,
+                    "code": current_code,
+                    "execution": execution,
+                    "feedback": feedback_attempts,
+                }
+
+        analysis = analyze_error_log(current_error, current_code, model=model)
+        feedback_attempts.append({"attempt": attempt, "analysis": analysis})
+        if not analysis.get("success"):
+            return {
+                "success": False,
+                "attempts": attempt,
+                "error": analysis.get("error", "피드백 분석에 실패했습니다."),
+                "feedback": feedback_attempts,
             }
-        ]
-    )
 
-    fixed_code = response["message"]["content"]
-    print("===QWEN이 보낸 원본===")
-    print(repr(fixed_code))
+        current_code = str(analysis.get("fixed_code", current_code))
+        if not execute:
+            break
 
-    # Qwen이 붙인 마크다운 코드 표시 제거
-    fixed_code = fixed_code.replace("```python", "")
-    fixed_code = fixed_code.replace("```", "")
-    fixed_code = fixed_code.strip()
+    if apply_fix and target_path is not None:
+        target_path.write_text(current_code, encoding="utf-8")
 
-    print("AI가 수정한 코드:")
-    print(fixed_code)
+    return {
+        "success": True,
+        "attempts": len(feedback_attempts),
+        "fixed_code": current_code,
+        "applied": bool(apply_fix and target_path is not None),
+        "feedback": feedback_attempts,
+    }
 
-    with open(file_name, "w", encoding="utf-8") as f:
-        f.write(fixed_code)
 
-    print("AI가 코드를 수정했습니다.")
+def _execute_code(code_text: str, cwd: Path | None) -> dict[str, Any]:
+    """코드 문자열을 별도 프로세스에서 실행합니다."""
+    import tempfile
 
-else:
-    print("\n3번 시도했지만 실행에 성공하지 못했습니다.")
+    with tempfile.TemporaryDirectory(prefix="jarvis_feedback_") as temp_dir:
+        temp_path = Path(temp_dir) / "feedback_target.py"
+        temp_path.write_text(code_text, encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(temp_path)],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    return {
+        "success": result.returncode == 0,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "return_code": result.returncode,
+    }
+
+
+if __name__ == "__main__":
+    print(run_feedback(code_path="buggy.py", execute=True, apply_fix=True))

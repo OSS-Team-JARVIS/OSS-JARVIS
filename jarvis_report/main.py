@@ -102,7 +102,7 @@ def generate_final_report(
     return final_report
 
 
-def run_pipeline(project_name: str, raw_data_path: str, use_mock: bool = False) -> None:
+def run_pipeline(project_name: str, raw_data_path: str, use_mock: bool = False) -> dict[str, str]:
     """전체 AI 보고서 생성 파이프라인을 구동합니다.
 
     Args:
@@ -149,8 +149,9 @@ def run_pipeline(project_name: str, raw_data_path: str, use_mock: bool = False) 
         )
 
         # 5단계 저장
-        writer.write_reports(project_name, final_report)
+        report_paths = writer.write_reports(project_name, final_report)
         print("저장 완료")
+        return report_paths
 
     except Exception as e:
         error_msg = str(e)

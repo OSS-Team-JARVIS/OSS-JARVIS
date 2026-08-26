@@ -78,7 +78,7 @@ class ReportWriter:
             print(f"[ReportWriter] 파일 변환 에러: {e}")
             return False
 
-    def write_reports(self, project_name: str, content: str) -> None:
+    def write_reports(self, project_name: str, content: str) -> dict[str, str]:
         """보고서 파일들을 일괄 저장합니다 (MD, PDF, DOCX).
 
         Pandoc이 설치되어 있지 않거나 변환 엔진이 없으면 PDF/DOCX 변환은 건너뜁니다.
@@ -104,7 +104,7 @@ class ReportWriter:
                 "[ReportWriter] 시스템에 Pandoc이 설치되어 있지 않아 "
                 "PDF/DOCX 보고서 변환은 건너뛰고 Markdown만 저장합니다."
             )
-            return
+            return {"markdown": md_path}
 
         # 3. DOCX 변환
         if self.convert_with_pandoc(md_path, docx_path):
@@ -118,3 +118,10 @@ class ReportWriter:
                 "[ReportWriter] PDF 엔진(pdflatex, weasyprint 등)이 누락되었거나 "
                 "설정 오류로 인해 PDF 파일 변환은 실패하였습니다."
             )
+
+        paths = {"markdown": md_path}
+        if os.path.exists(docx_path):
+            paths["docx"] = docx_path
+        if os.path.exists(pdf_path):
+            paths["pdf"] = pdf_path
+        return paths
